@@ -25,7 +25,13 @@ O JSON deve ter EXATAMENTE as seguintes chaves:
   "medicamentos_em_uso": ["<medicamento 1>", "<medicamento 2>"],
   "alergias": "<string descrevendo alergias conhecidas, ou null>",
   "sinais_de_alerta": ["<red flag 1>", "<red flag 2>"],
-  "hipoteses_cid": ["<CID-10 código: descrição>", "<CID-10 código: descrição>"]
+  "hipoteses_cid": ["<CID-10 código: descrição>", "<CID-10 código: descrição>"],
+  "hipotese_tratamento": {
+    "medicamentos_sugeridos": ["<classe ou exemplo comum 1>", "<classe ou exemplo comum 2>"],
+    "exames_sugeridos": ["<exame laboratorial ou de imagem 1>", "<exame 2>"],
+    "condutas_imediatas": ["<conduta 1>", "<conduta 2>"],
+    "aviso_legal": "As sugestões acima são geradas por inteligência artificial com base nos dados fornecidos e têm caráter estritamente informativo. Devem obrigatoriamente ser avaliadas, validadas e prescritas por um médico habilitado. Não substituem o julgamento clínico profissional."
+  }
 }
 
 Regras:
@@ -34,6 +40,10 @@ Regras:
 - Para campos de texto sem dados identificados, use null.
 - Em 'sinais_de_alerta', liste apenas achados que exigem atenção imediata (ex: dor torácica, dispneia súbita, alteração de consciência).
 - Em 'hipoteses_cid', sugira de 1 a 3 códigos CID-10 plausíveis com base nos sintomas descritos, no formato "X00: Descrição".
+- Em 'hipotese_tratamento.medicamentos_sugeridos', mencione apenas classes farmacológicas ou exemplos genéricos comuns — nunca prescrevendo doses.
+- Em 'hipotese_tratamento.exames_sugeridos', sugira exames laboratoriais ou de imagem pertinentes ao quadro.
+- Em 'hipotese_tratamento.condutas_imediatas', inclua orientações não-farmacológicas (ex: repouso, hidratação, monitoramento).
+- O campo 'aviso_legal' dentro de 'hipotese_tratamento' deve sempre conter o texto fixo exigido, sem alterações.
 - Escreva sempre em português.
 """
 
@@ -103,7 +113,7 @@ def processar_texto(texto_bruto: str) -> DadosExtraidos:
         model=MODELO,
         messages=mensagens,
         temperature=0.2,
-        max_tokens=1024,
+        max_tokens=2048,
     )
 
     conteudo = resposta.choices[0].message.content or ""

@@ -11,14 +11,14 @@ TABLE = "anamneses"
 def criar_anamnese(payload: AnamneseCreate) -> AnamneseResponse:
     data = payload.model_dump(mode="json")
 
-    # Preenche campos extraídos via IA somente se não foram informados manualmente
-    if data.get("queixa_principal") is None or data.get("historico") is None:
+    # Preenche campos extraídos via IA somente se queixa_principal não foi informada
+    if data.get("queixa_principal") is None:
         try:
             extraido = groq_service.processar_texto(payload.texto_bruto)
-            if data.get("queixa_principal") is None:
-                data["queixa_principal"] = extraido.queixa_principal
-            if data.get("historico") is None:
-                data["historico"] = extraido.historico
+            extracted = extraido.model_dump(mode="json")
+            for field, value in extracted.items():
+                if data.get(field) is None:
+                    data[field] = value
         except Exception:
             # Falha na extração não bloqueia a criação da anamnese
             pass
@@ -72,7 +72,7 @@ def processar_anamnese(anamnese_id: UUID) -> AnamneseResponse:
 
     extraido = groq_service.processar_texto(anamnese.texto_bruto)
 
-    update_data = extraido.model_dump(mode="json", exclude_none=False)
+    update_data = extraido.model_dump(mode="json")
     response = (
         supabase.table(TABLE).update(update_data).eq("id", str(anamnese_id)).execute()
     )

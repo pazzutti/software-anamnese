@@ -1,6 +1,14 @@
 ﻿"use client";
 
 import { useState, useRef, useEffect } from "react";
+import { gerarPdfAnamnese } from "@/lib/gerarPdf";
+import { createClient } from "@/lib/supabase/client";
+
+async function getAccessToken(): Promise<string> {
+  const supabase = createClient();
+  const { data: { session } } = await supabase.auth.getSession();
+  return session?.access_token ?? "";
+}
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api/v1";
 
@@ -56,7 +64,9 @@ export default function AnamneseForm({ medicoId }: { medicoId: string }) {
   const [resultado, setResultado] = useState<AnamneseResultado | null>(null);
   const [rascunho, setRascunho] = useState<Rascunho | null>(null);
   const [salvo, setSalvo] = useState(false);
+  const [privacidadeReforcada, setPrivacidadeReforcada] = useState(false);
   const [salvando, setSalvando] = useState(false);
+  const [gerandoPdf, setGerandoPdf] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
@@ -141,9 +151,14 @@ export default function AnamneseForm({ medicoId }: { medicoId: string }) {
 
     setLoading(true);
     try {
+      const token = await getAccessToken();
       const formData = new FormData();
       formData.append("audio", audioFile);
-      const res = await fetch(`${API_URL}/transcricao/`, { method: "POST", body: formData });
+      const res = await fetch(`${API_URL}/transcricao/`, {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${token}` },
+        body: formData,
+      });
       if (!res.ok) {
         const json = await res.json().catch(() => ({}));
         throw new Error(json.detail ?? `Erro ${res.status}`);
@@ -168,10 +183,11 @@ export default function AnamneseForm({ medicoId }: { medicoId: string }) {
     setProcessandoIA(true);
     setEtapa("resultado"); // mostra skeleton imediatamente
     try {
+      const token = await getAccessToken();
       const res = await fetch(`${API_URL}/anamneses/`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ medico_id: medicoId, texto_bruto: textoRevisado }),
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+        body: JSON.stringify({ medico_id: medicoId, texto_bruto: textoRevisado, privacidade_reforcada: privacidadeReforcada }),
       });
       if (!res.ok) {
         const json = await res.json().catch(() => ({}));
@@ -196,9 +212,10 @@ export default function AnamneseForm({ medicoId }: { medicoId: string }) {
     setSalvando(true);
     setErro(null);
     try {
+      const token = await getAccessToken();
       const res = await fetch(`${API_URL}/anamneses/${resultado.id}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
         body: JSON.stringify({
           queixa_principal: rascunho.queixa_principal || null,
           historico_clinico: rascunho.historico_clinico || null,
@@ -236,11 +253,13 @@ export default function AnamneseForm({ medicoId }: { medicoId: string }) {
     setResultado(null);
     setRascunho(null);
     setSalvo(false);
+    setGerandoPdf(false);
     setProcessandoIA(false);
     setGravando(false);
     setTempoGravacao(0);
     if (timerRef.current) clearInterval(timerRef.current);
     mediaRecorderRef.current?.stop();
+    setPrivacidadeReforcada(false);
     setErro(null);
     if (fileRef.current) fileRef.current.value = "";
   }
@@ -341,6 +360,19 @@ export default function AnamneseForm({ medicoId }: { medicoId: string }) {
               )}
             </div>
           )}
+
+          {/* Privacidade Reforçada */}
+          <label className="flex items-center gap-2 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={privacidadeReforcada}
+              onChange={(e) => setPrivacidadeReforcada(e.target.checked)}
+              className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+            />
+            <span className="text-sm text-slate-600">
+              🔒 Privacidade Reforçada — remover dados identificadores antes de enviar para a IA
+            </span>
+          </label>
 
           {erro && <ErrorBox message={erro} />}
 
@@ -459,19 +491,49 @@ export default function AnamneseForm({ medicoId }: { medicoId: string }) {
           {erro && <ErrorBox message={erro} />}
 
           {/* Ações */}
-          <div className="flex gap-3 pt-1">
+          <div className="flex flex-col gap-2 pt-1">
+            <div className="flex gap-3">
+              <button
+                onClick={reiniciar}
+                className="flex-1 border border-slate-300 text-slate-600 hover:border-slate-400 rounded-lg py-2.5 text-sm transition"
+              >
+                + Nova anamnese
+              </button>
+              <button
+                onClick={handleConfirmarSalvar}
+                disabled={salvando || salvo}
+                className="flex-1 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 text-white font-medium rounded-lg py-2.5 text-sm transition"
+              >
+                {salvando ? "Salvando..." : salvo ? "Salvo ✓" : "Confirmar e salvar"}
+              </button>
+            </div>
             <button
-              onClick={reiniciar}
-              className="flex-1 border border-slate-300 text-slate-600 hover:border-slate-400 rounded-lg py-2.5 text-sm transition"
+              onClick={async () => {
+                if (!resultado || !rascunho) return;
+                setGerandoPdf(true);
+                try {
+                  await new Promise((r) => setTimeout(r, 50)); // permite re-render
+                  gerarPdfAnamnese({ ...resultado, ...rascunho });
+                } finally {
+                  setGerandoPdf(false);
+                }
+              }}
+              disabled={gerandoPdf}
+              className="w-full flex items-center justify-center gap-2 border-2 border-blue-600 text-blue-600 hover:bg-blue-50 disabled:border-blue-300 disabled:text-blue-300 font-medium rounded-lg py-2.5 text-sm transition"
             >
-              + Nova anamnese
-            </button>
-            <button
-              onClick={handleConfirmarSalvar}
-              disabled={salvando || salvo}
-              className="flex-1 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 text-white font-medium rounded-lg py-2.5 text-sm transition"
-            >
-              {salvando ? "Salvando..." : salvo ? "Salvo ✓" : "Confirmar e salvar"}
+              {gerandoPdf ? (
+                <>
+                  <span className="inline-block w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+                  Gerando PDF...
+                </>
+              ) : (
+                <>
+                  <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0-3-3m3 3 3-3M4.5 19.5h15a1.5 1.5 0 0 0 1.5-1.5v-9a1.5 1.5 0 0 0-1.5-1.5h-3.75L15 4.5H9L7.25 7.5H4.5A1.5 1.5 0 0 0 3 9v9a1.5 1.5 0 0 0 1.5 1.5Z" />
+                  </svg>
+                  Gerar PDF
+                </>
+              )}
             </button>
           </div>
         </div>

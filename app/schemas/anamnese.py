@@ -26,6 +26,10 @@ class AnamneseCreate(BaseModel):
     alergias: Optional[str] = Field(None, description="Alergias conhecidas")
     sinais_de_alerta: Optional[List[str]] = Field(None, description="Red flags identificados")
     hipoteses_cid: Optional[List[str]] = Field(None, description="Sugestões de códigos CID-10")
+    privacidade_reforcada: bool = Field(
+        False,
+        description="Se True, remove dados identificadores antes de enviar o texto para a IA",
+    )
 
 
 class AnamneseUpdate(BaseModel):

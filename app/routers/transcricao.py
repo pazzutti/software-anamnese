@@ -1,5 +1,8 @@
-from fastapi import APIRouter, HTTPException, UploadFile, File, status
+from uuid import UUID
 
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status
+
+from app.dependencies.auth import get_current_user_id
 from app.schemas.transcricao import TranscricaoResponse
 from app.services import whisper_service
 
@@ -21,6 +24,7 @@ TAMANHO_MAXIMO_BYTES = 25 * 1024 * 1024  # 25 MB
 )
 async def transcrever(
     audio: UploadFile = File(..., description="Arquivo de áudio a ser transcrito"),
+    _user_id: UUID = Depends(get_current_user_id),
 ):
     conteudo = await audio.read()
 

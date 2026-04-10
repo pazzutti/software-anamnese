@@ -3,6 +3,10 @@ import { jsPDF } from "jspdf";
 export interface DadosAnamnese {
   id: string;
   medico_id: string;
+  nome_paciente: string;
+  idade_paciente: string;
+  peso_paciente: number | null;
+  altura_paciente: number | null;
   texto_bruto: string;
   queixa_principal: string | null;
   historico_clinico: string | null;
@@ -10,6 +14,12 @@ export interface DadosAnamnese {
   alergias: string | null;
   sinais_de_alerta: string[] | null;
   hipoteses_cid: string[] | null;
+  hipotese_tratamento: {
+    medicamentos_sugeridos: string[];
+    exames_sugeridos: string[];
+    condutas_imediatas: string[];
+    aviso_legal: string;
+  } | null;
   criado_em: string;
 }
 
@@ -224,10 +234,35 @@ export function gerarPdfAnamnese(dados: DadosAnamnese) {
   doc.line(MARGIN_X, ctx.y, PAGE_W - MARGIN_X, ctx.y);
   ctx.y += 8;
 
-  // ── Seção: Dados da Anamnese ───────────────────────────────────────────────
-  drawSectionTitle(ctx, "Dados da Anamnese");
+  // ── Seção: Dados do Paciente ───────────────────────────────────────────────
+  drawSectionTitle(ctx, "Dados do Paciente");
 
-  drawTextField(ctx, "Queixa principal",  dados.queixa_principal);
+  const pesoStr   = dados.peso_paciente   != null ? `${dados.peso_paciente} kg`  : "Não informado";
+  const alturaStr = dados.altura_paciente != null ? `${dados.altura_paciente} cm` : "Não informado";
+
+  // Grade 2×2: nome | idade / peso | altura
+  const halfW = (CONTENT_W - 6) / 2;
+  const cellH = 16;
+
+  const drawPatientCell = (x: number, y: number, w: number, label: string, value: string) => {
+    fillRoundRect(doc, x, y, w, cellH, 2, C_LIGHT_BG);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(7.5);
+    doc.setTextColor(...C_MID);
+    doc.text(label.toUpperCase(), x + 4, y + 6);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9.5);
+    doc.setTextColor(...C_DARK);
+    doc.text(value, x + 4, y + 13);
+  };
+
+  ensureSpace(ctx, cellH * 2 + 10);
+  drawPatientCell(MARGIN_X,              ctx.y, halfW, "Nome completo",        dados.nome_paciente);
+  drawPatientCell(MARGIN_X + halfW + 6,  ctx.y, halfW, "Idade / Nascimento",   dados.idade_paciente);
+  ctx.y += cellH + 4;
+  drawPatientCell(MARGIN_X,              ctx.y, halfW, "Peso",   pesoStr);
+  drawPatientCell(MARGIN_X + halfW + 6,  ctx.y, halfW, "Altura", alturaStr);
+  ctx.y += cellH + 8;
   drawTextField(ctx, "Histórico clínico", dados.historico_clinico);
   drawTextField(ctx, "Alergias",          dados.alergias);
 
@@ -243,6 +278,52 @@ export function gerarPdfAnamnese(dados: DadosAnamnese) {
   drawSectionTitle(ctx, "Hipóteses Diagnósticas (CID-10)");
 
   drawTagList(ctx, "Hipóteses CID-10", dados.hipoteses_cid);
+
+  // ── Seção: Hipótese de Tratamento ─────────────────────────────────────────
+  if (dados.hipotese_tratamento) {
+    const ht = dados.hipotese_tratamento;
+    ctx.y += 4;
+    drawSectionTitle(ctx, "Hipótese de Tratamento");
+
+    drawTagList(ctx, "Medicamentos sugeridos", ht.medicamentos_sugeridos?.length ? ht.medicamentos_sugeridos : null);
+    drawTagList(ctx, "Exames sugeridos",        ht.exames_sugeridos?.length       ? ht.exames_sugeridos       : null);
+
+    if (ht.condutas_imediatas?.length) {
+      const { doc } = ctx;
+      ensureSpace(ctx, 14 + ht.condutas_imediatas.length * 6);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(7.5);
+      doc.setTextColor(...C_MID);
+      doc.text("CONDUTAS IMEDIATAS", MARGIN_X, ctx.y + 5);
+      ctx.y += 9;
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9);
+      doc.setTextColor(...C_DARK);
+      for (const conduta of ht.condutas_imediatas) {
+        ensureSpace(ctx, 7);
+        doc.text(`• ${conduta}`, MARGIN_X + 3, ctx.y + 5);
+        ctx.y += 6;
+      }
+      ctx.y += 4;
+    }
+
+    if (ht.aviso_legal) {
+      const { doc } = ctx;
+      const avisoLines = wrapText(doc, `⚠  ${ht.aviso_legal}`, CONTENT_W - 10);
+      const avisoH = avisoLines.length * 5 + 10;
+      ensureSpace(ctx, avisoH);
+      const C_YELLOW_BG   = [254, 252, 232] as [number, number, number];
+      const C_YELLOW_TEXT = [113,  63,  18] as [number, number, number];
+      fillRoundRect(doc, MARGIN_X, ctx.y, CONTENT_W, avisoH, 2, C_YELLOW_BG);
+      doc.setFont("helvetica", "italic");
+      doc.setFontSize(8);
+      doc.setTextColor(...C_YELLOW_TEXT);
+      avisoLines.forEach((line: string, i: number) => {
+        doc.text(line, MARGIN_X + 5, ctx.y + 7 + i * 5);
+      });
+      ctx.y += avisoH + 6;
+    }
+  }
 
   // ── Seção: Texto bruto ────────────────────────────────────────────────────
   ctx.y += 4;

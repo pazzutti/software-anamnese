@@ -17,6 +17,10 @@ type Etapa = "entrada" | "revisao" | "resultado";
 interface AnamneseResultado {
   id: string;
   medico_id: string;
+  nome_paciente: string;
+  idade_paciente: string;
+  peso_paciente: number | null;
+  altura_paciente: number | null;
   texto_bruto: string;
   queixa_principal: string | null;
   historico_clinico: string | null;
@@ -24,6 +28,12 @@ interface AnamneseResultado {
   alergias: string | null;
   sinais_de_alerta: string[] | null;
   hipoteses_cid: string[] | null;
+  hipotese_tratamento: {
+    medicamentos_sugeridos: string[];
+    exames_sugeridos: string[];
+    condutas_imediatas: string[];
+    aviso_legal: string;
+  } | null;
   criado_em: string;
 }
 
@@ -50,6 +60,12 @@ function toRascunho(r: AnamneseResultado): Rascunho {
 export default function AnamneseForm({ medicoId }: { medicoId: string }) {
   const [etapa, setEtapa] = useState<Etapa>("entrada");
   const [modo, setModo] = useState<"texto" | "audio">("texto");
+
+  // Dados do paciente
+  const [nomePaciente, setNomePaciente] = useState("");
+  const [idadePaciente, setIdadePaciente] = useState("");
+  const [pesoPaciente, setPesoPaciente] = useState("");
+  const [alturaPaciente, setAlturaPaciente] = useState("");
 
   // Etapa 1 — entrada
   const [textoManual, setTextoManual] = useState("");
@@ -140,6 +156,9 @@ export default function AnamneseForm({ medicoId }: { medicoId: string }) {
   async function handleProximaEtapa() {
     setErro(null);
 
+    if (!nomePaciente.trim()) { setErro("Informe o nome do paciente."); return; }
+    if (!idadePaciente.trim()) { setErro("Informe a data de nascimento ou idade do paciente."); return; }
+
     if (modo === "texto") {
       if (!textoManual.trim()) { setErro("Cole ou digite o texto da consulta."); return; }
       setTextoRevisado(textoManual);
@@ -187,7 +206,15 @@ export default function AnamneseForm({ medicoId }: { medicoId: string }) {
       const res = await fetch(`${API_URL}/anamneses/`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
-        body: JSON.stringify({ medico_id: medicoId, texto_bruto: textoRevisado, privacidade_reforcada: privacidadeReforcada }),
+        body: JSON.stringify({
+          medico_id: medicoId,
+          nome_paciente: nomePaciente.trim(),
+          idade_paciente: idadePaciente.trim(),
+          peso_paciente: pesoPaciente ? parseFloat(pesoPaciente) : null,
+          altura_paciente: alturaPaciente ? parseInt(alturaPaciente, 10) : null,
+          texto_bruto: textoRevisado,
+          privacidade_reforcada: privacidadeReforcada,
+        }),
       });
       if (!res.ok) {
         const json = await res.json().catch(() => ({}));
@@ -245,6 +272,10 @@ export default function AnamneseForm({ medicoId }: { medicoId: string }) {
   function reiniciar() {
     setEtapa("entrada");
     setModo("texto");
+    setNomePaciente("");
+    setIdadePaciente("");
+    setPesoPaciente("");
+    setAlturaPaciente("");
     setTextoManual("");
     setAudioFile(null);
     setTextoRevisado("");
@@ -272,6 +303,60 @@ export default function AnamneseForm({ medicoId }: { medicoId: string }) {
       {/* ── ETAPA 1: Entrada ── */}
       {etapa === "entrada" && (
         <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 space-y-5">
+
+          {/* ── Dados do paciente ── */}
+          <div className="space-y-3">
+            <h3 className="text-sm font-semibold text-slate-700 uppercase tracking-wide">Dados do paciente</h3>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-slate-600">Nome completo <span className="text-red-500">*</span></label>
+                <input
+                  type="text"
+                  value={nomePaciente}
+                  onChange={(e) => setNomePaciente(e.target.value)}
+                  placeholder="Ex: Maria da Silva"
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-800 bg-white placeholder:text-slate-400 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-slate-600">Data de nascimento ou idade <span className="text-red-500">*</span></label>
+                <input
+                  type="text"
+                  value={idadePaciente}
+                  onChange={(e) => setIdadePaciente(e.target.value)}
+                  placeholder="Ex: 45 anos ou 12/03/1980"
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-800 bg-white placeholder:text-slate-400 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-slate-600">Peso (kg)</label>
+                <input
+                  type="number"
+                  min="1"
+                  step="0.1"
+                  value={pesoPaciente}
+                  onChange={(e) => setPesoPaciente(e.target.value)}
+                  placeholder="Ex: 72.5"
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-800 bg-white placeholder:text-slate-400 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-slate-600">Altura (cm)</label>
+                <input
+                  type="number"
+                  min="1"
+                  step="1"
+                  value={alturaPaciente}
+                  onChange={(e) => setAlturaPaciente(e.target.value)}
+                  placeholder="Ex: 170"
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-800 bg-white placeholder:text-slate-400 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="border-t border-slate-100" />
+
           <div className="flex gap-2">
             {(["texto", "audio"] as const).map((m) => (
               <button
@@ -442,6 +527,33 @@ export default function AnamneseForm({ medicoId }: { medicoId: string }) {
             )}
           </div>
 
+          {/* Dados do paciente */}
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5">
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">👤 Dados do paciente</p>
+            <div className="grid grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-4">
+              <div>
+                <p className="text-xs text-slate-400">Nome</p>
+                <p className="text-sm font-medium text-slate-800">{resultado.nome_paciente}</p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-400">Idade / Nascimento</p>
+                <p className="text-sm font-medium text-slate-800">{resultado.idade_paciente}</p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-400">Peso</p>
+                <p className="text-sm font-medium text-slate-800">
+                  {resultado.peso_paciente != null ? `${resultado.peso_paciente} kg` : <span className="text-slate-400 font-normal">Não informado</span>}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-400">Altura</p>
+                <p className="text-sm font-medium text-slate-800">
+                  {resultado.altura_paciente != null ? `${resultado.altura_paciente} cm` : <span className="text-slate-400 font-normal">Não informado</span>}
+                </p>
+              </div>
+            </div>
+          </div>
+
           {/* Cards editáveis — campos de texto */}
           <EditableTextCard
             label="Queixa principal"
@@ -481,6 +593,11 @@ export default function AnamneseForm({ medicoId }: { medicoId: string }) {
             placeholder="Ex: J45: Asma"
             tagColor="blue"
           />
+
+          {/* Sugestão de Conduta Médica */}
+          {resultado.hipotese_tratamento && (
+            <CondutaMedicaCard hipotese={resultado.hipotese_tratamento} />
+          )}
 
           {/* Texto bruto (somente leitura) */}
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 space-y-2">
@@ -538,6 +655,137 @@ export default function AnamneseForm({ medicoId }: { medicoId: string }) {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ── CondutaMedicaCard ─────────────────────────────────────────────────────────
+
+interface HipoteseTratamento {
+  medicamentos_sugeridos: string[];
+  exames_sugeridos: string[];
+  condutas_imediatas: string[];
+  aviso_legal: string;
+}
+
+function CondutaMedicaCard({ hipotese }: { hipotese: HipoteseTratamento }) {
+  const [copiado, setCopiado] = useState(false);
+
+  function buildTexto(): string {
+    const linhas: string[] = ["=== SUGESTÃO DE CONDUTA MÉDICA (gerada por IA) ===\n"];
+
+    if (hipotese.medicamentos_sugeridos?.length) {
+      linhas.push("💊 MEDICAMENTOS SUGERIDOS:");
+      hipotese.medicamentos_sugeridos.forEach((m) => linhas.push(`  • ${m}`));
+      linhas.push("");
+    }
+    if (hipotese.exames_sugeridos?.length) {
+      linhas.push("🔬 EXAMES SUGERIDOS:");
+      hipotese.exames_sugeridos.forEach((e) => linhas.push(`  • ${e}`));
+      linhas.push("");
+    }
+    if (hipotese.condutas_imediatas?.length) {
+      linhas.push("📋 CONDUTAS IMEDIATAS:");
+      hipotese.condutas_imediatas.forEach((c) => linhas.push(`  • ${c}`));
+      linhas.push("");
+    }
+    if (hipotese.aviso_legal) {
+      linhas.push(`⚠️  ${hipotese.aviso_legal}`);
+    }
+    return linhas.join("\n");
+  }
+
+  async function copiar() {
+    try {
+      await navigator.clipboard.writeText(buildTexto());
+      setCopiado(true);
+      setTimeout(() => setCopiado(false), 2500);
+    } catch {
+      // fallback silencioso
+    }
+  }
+
+  return (
+    <div className="rounded-2xl border-2 border-blue-200 bg-blue-50/60 shadow-sm overflow-hidden">
+      {/* Cabeçalho */}
+      <div className="flex items-center justify-between px-5 py-3 bg-blue-600">
+        <div className="flex items-center gap-2">
+          <span className="text-white text-base">🩺</span>
+          <span className="text-sm font-semibold text-white tracking-wide">Sugestão de Conduta Médica</span>
+          <span className="ml-2 text-xs font-medium bg-blue-500 text-blue-100 border border-blue-400 rounded-full px-2 py-0.5">Gerado por IA</span>
+        </div>
+        <button
+          onClick={copiar}
+          className="flex items-center gap-1.5 text-xs font-medium bg-white text-blue-700 hover:bg-blue-50 rounded-lg px-3 py-1.5 transition"
+        >
+          {copiado ? (
+            <>
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+              </svg>
+              <span className="text-emerald-600">Copiado!</span>
+            </>
+          ) : (
+            <>
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15.666 3.888A2.25 2.25 0 0 0 13.5 2.25h-3c-1.03 0-1.9.693-2.166 1.638m7.332 0c.055.194.084.4.084.612v0a.75.75 0 0 1-.75.75H9a.75.75 0 0 1-.75-.75v0c0-.212.03-.418.084-.612m7.332 0c.646.049 1.288.11 1.927.184 1.1.128 1.907 1.077 1.907 2.185V19.5a2.25 2.25 0 0 1-2.25 2.25H6.75A2.25 2.25 0 0 1 4.5 19.5V6.257c0-1.108.806-2.057 1.907-2.185a48.208 48.208 0 0 1 1.927-.184" />
+              </svg>
+              Copiar sugestões
+            </>
+          )}
+        </button>
+      </div>
+
+      {/* Corpo */}
+      <div className="px-5 py-4 space-y-4">
+        {hipotese.medicamentos_sugeridos?.length > 0 && (
+          <div className="space-y-2">
+            <p className="text-xs font-semibold text-blue-700 uppercase tracking-wide">💊 Medicamentos sugeridos</p>
+            <ul className="space-y-1">
+              {hipotese.medicamentos_sugeridos.map((m, i) => (
+                <li key={i} className="flex items-start gap-2 text-sm text-slate-700">
+                  <span className="mt-1 w-1.5 h-1.5 rounded-full bg-blue-400 shrink-0" />
+                  {m}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {hipotese.exames_sugeridos?.length > 0 && (
+          <div className="space-y-2">
+            <p className="text-xs font-semibold text-blue-700 uppercase tracking-wide">🔬 Exames sugeridos</p>
+            <ul className="space-y-1">
+              {hipotese.exames_sugeridos.map((e, i) => (
+                <li key={i} className="flex items-start gap-2 text-sm text-slate-700">
+                  <span className="mt-1 w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
+                  {e}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {hipotese.condutas_imediatas?.length > 0 && (
+          <div className="space-y-2">
+            <p className="text-xs font-semibold text-blue-700 uppercase tracking-wide">📋 Condutas imediatas</p>
+            <ul className="space-y-1">
+              {hipotese.condutas_imediatas.map((c, i) => (
+                <li key={i} className="flex items-start gap-2 text-sm text-slate-700">
+                  <span className="mt-1 w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
+                  {c}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {hipotese.aviso_legal && (
+          <div className="rounded-lg border border-yellow-200 bg-yellow-50 px-3 py-2.5">
+            <p className="text-xs text-yellow-800 leading-relaxed">⚠️ {hipotese.aviso_legal}</p>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
